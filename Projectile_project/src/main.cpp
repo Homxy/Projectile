@@ -6,7 +6,9 @@
 #include <LCD_I2C.h>
 #include "math.h"
 LCD_I2C lcd(0x27, 16, 2);
-
+//sda 21
+//scl 22
+double V = 4.12; //innitial velocity 
 #define BUTTON 12 //button to shot servo
 //shotservo 18
 //degreeservo 19
@@ -124,6 +126,7 @@ void setup() {
   
   Serial.begin(9600);
   lcd.begin();
+  lcd.clear();
   lcd.backlight();
   WiFi.begin(ssid, pass);
   
@@ -170,13 +173,13 @@ void loop() {
   }    
            
   }else{//Auto code
-    angle = asin(distance_1*9.8/(4.12*4.12*2*100));//(0.5);
+    angle = asin(distance_1*9.8/(V*V*2*100));//(0.5);
     angle = (angle*180/3.14);
     Serial.print("angle :");
     Serial.println(angle);
     if(angle < 58){
-    deServo.write(angle+12);
-    degree = angle;
+    deServo.write(90-(angle+12));
+    degree = 90-(angle+12);
     }
   }
   lcd_print(distance_1,degree);
