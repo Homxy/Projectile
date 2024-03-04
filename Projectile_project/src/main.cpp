@@ -7,22 +7,22 @@
 #include "math.h"
 LCD_I2C lcd(0x27, 16, 2);
 
-#define BUTTON 12
-
-
-int potpin = 32;  
+#define BUTTON 12 //button to shot servo
+//shotservo 18
+//degreeservo 19
+int potpin = 32;  //potentiometer pin 
 int val;
 int valA;    
 double angle;
 int degree;
 
-int state = 15;
+int state = 15;// mqtt or manual analog
 int State_M;
-int manual = 2;
+int manual = 2;// Botton or Auto pin 
 int Manual;
 
-int trig = 16;
-int echo = 17;
+int trig = 16;// trig ultrasonic pin
+int echo = 17;// echo ultrasonic pin
 
 
 long duration,distance_1;
