@@ -3,24 +3,32 @@
 #include <MQTT.h>
 #include <LiquidCrystal_I2C.h>
 #include <ESP32Servo.h>
+#include <LCD_I2C.h>
+#include "math.h"
+LCD_I2C lcd(0x27, 16, 2);
 
-
-
-#define BUTTON 0
+#define BUTTON 12
 
 
 int potpin = 32;  
-int val;    
-int state = 15;
-int State;
+int val;
+int valA;    
+double angle;
+int degree;
 
+int state = 15;
+int State_M;
+int manual = 2;
+int Manual;
+
+int trig = 16;
+int echo = 17;
+
+
+long duration,distance_1;
 Servo deServo;
 Servo shotServo;
 
-
-int lcdColumns = 16;
-int lcdRows = 2;
-LiquidCrystal_I2C lcd(0x27, lcdColumns, lcdRows);
 
 const char ssid[] = "@JumboPlusIoT";
 const char pass[] = "abcdefgh";
@@ -37,10 +45,29 @@ int counter=0;
 WiFiClient net;
 MQTTClient client;
 
-
-
 unsigned long lastMillis = 0;
 
+
+void lcd_print(int distance,int degree){
+lcd.backlight();
+lcd.clear();
+
+lcd.print("degree :");
+lcd.print(degree);
+lcd.setCursor(0,1);
+lcd.print("distance :");
+lcd.print(distance);
+}
+
+long dis_tance(){
+  digitalWrite(echo, LOW);
+  delayMicroseconds(2);
+  digitalWrite(echo, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(echo, LOW);
+  duration = pulseIn(trig, HIGH);
+  return duration/58;
+}
 
 void IRAM_ATTR IO_INT_ISR()
 {
@@ -48,6 +75,8 @@ void IRAM_ATTR IO_INT_ISR()
   angle = (angle == 0) ? 90 : 0;
   shotServo.write(angle);
 }
+
+
 
 void connect() {
   Serial.print("checking wifi...");
@@ -73,54 +102,91 @@ void connect() {
 void messageReceived(String &topic, String &payload) {
   Serial.println("incoming: " + topic + " - " + payload);
 
-  if(payload == "r"){
+  if(payload == "200"){//shot
     IO_INT_ISR();
   }
-  if(payload == "analog"){
-
+  if(payload == "300"){ //Mode analog
+    State_M = false;
   }
 
   if(payload.toInt() >= 0 && payload.toInt() <= 70){
-    deServo.write(payload.toInt()+12);
+    val = (payload.toInt()+12);
+    Serial.print(val);
   }
 }
 
 void setup() {
+  pinMode(echo, OUTPUT);
+  pinMode(trig, INPUT);
+  pinMode(state,INPUT_PULLUP);
+  pinMode(manual,INPUT_PULLUP);
+  pinMode(BUTTON, INPUT_PULLUP);
+  
   Serial.begin(9600);
-  lcd.init();
-  // turn on LCD backlight                      
+  lcd.begin();
   lcd.backlight();
   WiFi.begin(ssid, pass);
-
+  
   // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported
   // by Arduino. You need to set the IP address directly.
   client.begin(mqtt_broker, MQTT_PORT, net);
   client.onMessage(messageReceived);
 
-  connect();
+  /* connect(); */
 
   deServo.attach(19); 
   shotServo.attach(18);
-  pinMode(state,INPUT);
-  pinMode(BUTTON, INPUT);
+  
   shotServo.write(0);
 
-  attachInterrupt(BUTTON, IO_INT_ISR, RISING);
+  attachInterrupt(BUTTON, IO_INT_ISR, FALLING);
+  
 }
 
 void loop() {
-  State = digitalRead(state);
-  Serial.println(State);
+  State_M = digitalRead(state);
+  Manual = digitalRead(manual);
+  //Serial.println(State);
+  distance_1 = dis_tance();
+  //Serial.println(distance_1);
+  
+
   client.loop();
-  delay(10);  // <- fixes some issues with WiFi stability
 
   if (!client.connected()) {
     connect();
   }
 
-  val = analogRead(potpin);
-  val = map(val, 0, 2047, 12, 70);     // scale it to use it with the servo (value between 0 and 180)
-  //Serial.println(val);            // reads the value of the potentiometer (value between 0 and 1023)
-  deServo.write(val);                  // sets the servo position according to the scaled value
-  delay(15);           
+  valA = analogRead(potpin);// scale it to use it with the servo (value between 0 and 180)
+  valA = map(valA, 0, 2047, 12, 70);// reads the value of the potentiometer (value between 0 and 1023)
+
+  if(Manual == true){
+  if(State_M  == false){ //push botton down to control by analog
+    deServo.write(valA); 
+    degree =valA;
+  }else{
+    deServo.write(val);
+    degree =val;
+  }    
+           
+  }else{//Auto code
+    angle = asin(distance_1*9.8/(4.12*4.12*2*100));//(0.5);
+    angle = (angle*180/3.14);
+    Serial.print("angle :");
+    Serial.println(angle);
+    if(angle < 58){
+    deServo.write(angle+12);
+    degree = angle;
+    }
+  }
+  lcd_print(distance_1,degree);
+  client.publish(mqtt_degree, String(degree));
+  Serial.print(Manual);
+  Serial.print(" "); 
+  Serial.print(State_M);
+  Serial.print(" ");  
+  Serial.print(valA);
+  Serial.print(" ");  
+  Serial.println(distance_1);                  // sets the servo position according to the scaled value
+  delay(50);  // <- fixes some issues with WiFi stability       
 }
